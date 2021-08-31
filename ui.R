@@ -1,0 +1,143 @@
+source("./global.R")
+
+dashboardPage(
+  skin = "black",
+  
+  dashboardHeader(title = "COVMAL - live tracker"),
+  
+  
+  dashboardSidebar(
+    width = 250,
+    
+    sidebarMenu(
+      menuItem("Home Page", tabName = "menu_home", icon = icon("home")),
+      
+      menuItem("Healthcare resource utilization", tabName = "menu_hru", icon = icon("hospital")),
+      
+      menuItem("Clusters", tabName = "menu_cluster", icon = icon("project-diagram"))
+      
+    ) ## end of sidebarMenu
+  ), ## end of dashboardSidebar
+  
+  
+  dashboardBody(
+    
+    tabItems(
+      
+      tabItem(
+        tabName = "menu_home",
+        
+        fluidRow(
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Daily summary by states", collapsible = TRUE,
+            
+            selectInput("home_case_state", "Select states:", choices = unique(dt_daily_state$state), selected = c("All", "W.P. Kuala Lumpur"), multiple = TRUE),
+            
+            tabsetPanel(
+              tabPanel("Adjusted daily incidence by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("home_plt_case_state") %>% withSpinner(size = 2))))),
+              
+              tabPanel("Adjusted daily incidence and not-fully vaccination rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("home_plt_case_vac_state") %>% withSpinner(size = 2))))),
+              
+              tabPanel("Adjusted daily deaths by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("home_plt_case_death_state") %>% withSpinner(size = 2))))),
+              
+              tabPanel("Adjusted daily deaths and not-fully vaccination rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("home_plt_death_vac_state") %>% withSpinner(size = 2)))))
+            ) ## end of tabsetPanel
+          ), ## end of box
+          
+          
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Cumulative summary by states", collapsible = TRUE,
+            
+            selectInput("home_cumul", "Select index:", choices = c("Choose" = "",
+                                                                   "Cumulative cases" = "cumul_cases_new",
+                                                                   "Cumulative cases per 100K population" = "cumul_cases_new_adjust",
+                                                                   "Cumulative deaths" = "cumul_deaths_new",
+                                                                   "Cumulative deaths per 1M population" = "cumul_deaths_new_adjust"), 
+                        selected = "cumul_cases_new", multiple = FALSE, selectize = TRUE),
+            
+            leafletOutput("home_plt_heatmap_state") %>% withSpinner(size = 2)
+          ) ## end of box
+        ) ## end of fluidRow
+      ), ## end of tabItem
+      
+      
+      tabItem(
+        tabName = "menu_hru",
+        
+        fluidRow(
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Current resource avalability by states", collapsible = TRUE,
+            
+            selectInput("hru_cumul", "Select index:", choices = c("Choose" = "",
+                                                                  "Hospital beds" = "cumul_remain_bed_rate",
+                                                                  "ICU beds" = "remain_icu_covid_rate",
+                                                                  "Ventilators avalability" = "remain_vent_covid_rate",
+                                                                  "PKRC beds avalability" = "cumul_remain_pkrc_rate"), 
+                        selected = "cumul_remain_bed_rate", multiple = FALSE, selectize = TRUE),
+            
+            leafletOutput("hru_plt_heatmap_state") %>% withSpinner(size = 2)
+          ), ## end of box
+          
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Healthcare resources by states", collapsible = TRUE,
+            
+            selectInput("hru_resource_state", "Select states:", choices = unique(dt_daily_state$state), selected = c("All", "W.P. Kuala Lumpur"), multiple = TRUE),
+            
+            tabsetPanel(
+              tabPanel("Hospital beds avalability rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_beds_avl_state") %>% withSpinner(size = 2))))),
+              tabPanel("ICU beds avalability rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_icu_avl_state") %>% withSpinner(size = 2))))),
+              tabPanel("Ventilators avalability rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_vent_avl_state") %>% withSpinner(size = 2))))),
+              tabPanel("PKRC beds avalability rate by states",
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_pkrc_avl_state") %>% withSpinner(size = 2)))))
+            ), ## end of tabsetPanel
+            
+            tabsetPanel(
+              tabPanel("Adjusted total hospital beds by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_beds_state") %>% withSpinner(size = 2))))),
+              tabPanel("Adjusted total ICU beds by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_icu_state") %>% withSpinner(size = 2))))),
+              tabPanel("Adjusted total ventilators by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_vent_state") %>% withSpinner(size = 2))))),
+              tabPanel("Adjusted total PKRC beds by states", 
+                       fluidPage(fluidRow(column(12, plotlyOutput("hru_plt_pkrc_state") %>% withSpinner(size = 2)))))
+            ) ## end of tabsetPanel
+          ) ## end of box
+        ) ## end of fluidRow
+      ), ## end of tabItem
+      
+      tabItem(
+        tabName = "menu_cluster",
+        
+        fluidRow(
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Cases by clusters analysis", collapsible = TRUE,
+            
+            fluidRow(
+              column(3, selectInput("cluster_case", "Select type of cases:", choices = c("All" = "cases_total", 
+                                                                                         "Active" = "cases_active", 
+                                                                                         "Recovered" = "recovered"), selected = "All")),
+              column(3, selectInput("cluster_status", "Select cluster status:", choices = c("All" = "all", 
+                                                                                            "Active" = "active", 
+                                                                                            "Ended" = "ended"), selected = "All")),
+              column(3, selectInput("cluster_state", "Select states:", choices = c(unique(dt_daily_state$state)), selected = "All"))
+            ),
+            
+            plotlyOutput("cluster_plt_case") %>% withSpinner(size = 2)
+          )
+        ) ## end of fluidRow
+      ) ## end of tabItem
+      
+    ) ## end of tabItems
+    
+  ) ## end of dashboardBody
+
+  
+  
+)
