@@ -3,7 +3,7 @@ source("./global.R")
 dashboardPage(
   skin = "black",
   
-  dashboardHeader(title = "COVMAL - live tracker"),
+  dashboardHeader(title = "COVMAL - V00-10-00"),
   
   
   dashboardSidebar(
