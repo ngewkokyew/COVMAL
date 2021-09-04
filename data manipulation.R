@@ -35,6 +35,7 @@ dt_daily_state <- dt_daily %>%
   ) %>%
   group_by(state) %>%
   mutate(
+    
     ## hospital
     cumul_hosp_netflow = cumsum(hosp_netflow),
     cumul_remain_bed = beds_covid - cumul_hosp_netflow,
@@ -61,6 +62,7 @@ dt_daily_state <- dt_daily %>%
     daily_full_adjust = daily_full*10000/pop,
     cumul_full_adjust = cumul_full*100000/pop,
     cumul_not_full_adjust = cumul_not_full*100/pop,
+    cumul_not_full_adjust = if_else(cumul_not_full_adjust < 0, 0, cumul_not_full_adjust), # to address over-injections for non-registered people
     beds_adjust = beds*100000/pop,
     beds_covid_adjust = beds_covid*100000/pop,
     beds_noncrit_adjust = beds_noncrit*100000/pop,
@@ -70,7 +72,17 @@ dt_daily_state <- dt_daily %>%
     pkrc_beds_adjust = pkrc_beds*100000/pop
   ) %>%
   mutate_if(is.numeric, ~if_else(. %nin% c(Inf, -Inf, NaN), ., NULL)) %>%
-  arrange(date, state)
+  ## Moving average
+  arrange(state, date) %>%
+  group_by(state) %>%
+  mutate(
+    cases_new_ma7 = rollmean(cases_new, k = 7, fill = NA, align = "right"),
+    cases_new_adjust_ma7 = rollmean(cases_new_adjust, k = 7, fill = NA, align = "right"),
+    deaths_new_ma7 = rollmean(deaths_new, k = 7, fill = NA, align = "right"),
+    deaths_new_adjust_ma7 = rollmean(deaths_new_adjust, k = 7, fill = NA, align = "right")
+  ) %>%
+  ungroup() %>%
+  arrange(date, state)  
 
 rm(temp_nation, dt_daily)
 

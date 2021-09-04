@@ -6,6 +6,7 @@ library(shinyWidgets)
 library(markdown)
 
 library(tidyverse)
+library(zoo)
 
 ## Visualization
 library(rgdal)
@@ -20,8 +21,8 @@ library(RCurl)
 `%nin%` = Negate(`%in%`)
 
 # Directory -------------------------
-dir_dt <- "./covid19-public"
-dir_dt_vac <- "./citf-public"
+# dir_dt <- "./covid19-public"
+# dir_dt_vac <- "./citf-public"
 dir_map <- "./map"
 
 

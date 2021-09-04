@@ -12,3 +12,29 @@ leaflet(nc_state) %>%
     highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
     popup = ~paste("State:", name, ", Statistics:", format(round(cumul_cases_new_adjust, digits = 1), nsmall = 1))
   )
+
+# moving average
+temp <- dt_daily_state %>%
+  arrange(state, date) %>%
+  group_by(state) %>%
+  mutate(
+    cases_new_ma7 = rollmean(cases_new, k = 7, fill = NA, align = "right"),
+    cases_new_adjust_ma7 = rollmean(cases_new_adjust, k = 7, fill = NA, align = "right")
+  ) %>%
+  ungroup() %>%
+  select(date, state, cases_new, cases_new_ma7, cases_new_adjust, cases_new_adjust_ma7)
+
+plot_ly(
+  data = temp %>% filter(state %in% c("All", "W.P. Kuala Lumpur")), 
+  x = ~date, y = ~cases_new_adjust, color = ~state,
+  type = "bar", barmode = "stack"
+) %>%
+  add_trace(
+    x = ~date, y = ~cases_new_adjust_ma7, color = ~state,
+    type = "scatter", mode = "lines"
+  ) %>%
+  layout(
+    yaxis = list(title = "Daily incidence case per 100K population"), 
+    xaxis = list(title = "Date", rangeslider = list(type = "date")),
+    legend = list(title = list(text = "<b> States </b>"), orientation = "h", y = 100)
+  )
