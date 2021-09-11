@@ -1,0 +1,104 @@
+source("global.R")
+
+dashboardPage(
+  skin = "black",
+  
+  dashboardHeader(title = "Technical Analysis"),
+  
+  dashboardSidebar(
+    width = 200,
+    
+    sidebarMenu(
+      menuItem("Home Page", tabName = "menu_home", icon = icon("home")),
+      
+      menuItem("Index & Market Width", tabName = "menu_width", icon = icon("chart-pie")),
+      
+      menuItem("Stock Bias", tabName = "menu_bias", icon = icon("table")),
+      
+      menuItem("Technical Analysis", tabName = "menu_tech", icon = icon("chart-line"))
+    ) ## end of sidebarMenu
+    
+  ), ## end of dashboardSidebar
+  
+  dashboardBody(
+    tabItems(
+      
+      tabItem(
+        tabName = "menu_home"
+      ),
+      
+      tabItem(
+        tabName = "menu_width",
+        fluidRow(
+          box(
+            width = 9, height = "100%", title = "Selection", collapsible = TRUE,
+            fluidRow(
+              column(
+                width = 6, selectInput("market_index", "Select an Index", selectize = TRUE, selected = "^GSPC", choices = c("Choose" = "",
+                                                                                                                            "SP 500" = "^GSPC",
+                                                                                                                            "NASDAQ" = "^IXIC",
+                                                                                                                            "Russell 2000" = "^RUT"))
+              ), ## end of column
+              column(width = 6, dateRangeInput("market_date", "Date range", start = (Sys.Date() - 365), end = Sys.Date(), min = "2015-01-01", max = Sys.Date())) ## end of column
+            ), ## end of fluidRow
+                                                                                         
+            actionButton("index_summary", "Run")
+          ), ## end of box
+          
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Index & Market Width",
+            plotlyOutput("plt_index", width = "auto", height = "1100px") %>% withSpinner(size = 2)
+          ) ## end of box
+        ) ## end of fluidRow
+      ), ## end of tabItem menu_width
+      
+      tabItem(
+        tabName = "menu_bias",
+        fluidRow(
+          box(
+            width = 6, height = "100%", title = "Selection", collapsible = TRUE,
+            selectInput("bias_stock", "Select stock(s).", multiple = TRUE, selectize = TRUE, choices = dt_sp %>% arrange(symbol) %>% pull(symbol), selected = c("AAPL", "AMZN", "FB", "MSFT", "GOOG", "TSLA")),
+            actionButton("bias_summary", "Run")
+          ), ## end of box
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Bias Summary",
+            dataTableOutput("dt_bias") %>% withSpinner(size = 2)
+          ) ## end of box
+        ) ## end of fluidRow
+      ), ## end of tabItem menu_bias
+      
+      tabItem(
+        tabName = "menu_tech",
+        fluidRow(
+          box(
+            width = 12, height = "100%", title = "Selection", collapsible = TRUE,
+            fluidRow(
+              column(width = 2, textInput("tech_stock", "Type the stock symbol.", value = "")),
+              column(width = 3, dateRangeInput("tech_date", "Date range:", start = (Sys.Date() - 365), end = Sys.Date(), min = "2015-01-01", max = Sys.Date())),
+              column(width = 7,  selectInput("tech_indicator", "Select additional indicators", multiple = TRUE, selectize = TRUE, selected = c("ema_20", "ema_60", "ema_120"),
+                                             choices = c("Choose" = "",
+                                                         "Simple moving average (20 days)" = "sma_20",
+                                                         "Simple moving average (60 days)" = "sma_60",
+                                                         "Simple moving average (120 days)" = "sma_120",
+                                                         "Exponential moving average (20 days)" = "ema_20",
+                                                         "Exponential moving average (60 days)" = "ema_60",
+                                                         "Exponential moving average (120 days)" = "ema_120")))
+            ),
+            actionButton("tech_summary", "Run")
+          ), ## end of box
+          box(
+            width = 12, height = "100%", title = "Historical Prices", collapsible = TRUE,
+            valueBoxOutput("tech_close", width = 4) %>% withSpinner(size = 2),
+            valueBoxOutput("tech_min_max_20", width = 4) %>% withSpinner(size = 2),
+            valueBoxOutput("tech_min_max_60", width = 4) %>% withSpinner(size = 2)
+          ), ## end of box
+          box(
+            solidHeader = TRUE, width = 12, height = "100%", title = "Charts",
+            plotlyOutput("plt_tech", width = "auto", height = "1100px") %>% withSpinner(size = 2)
+          ) ## end of box
+        ) ## end of fluidRow
+      ) ## end of tabItem menu_tech
+
+    ) ## end of tabItems
+  )
+)

@@ -1,6 +1,78 @@
 function(input, output, session){
   
   # menu_home -------------------------
+  output$home_total_case <- renderValueBox({
+    valueBox(
+      value = sum_cum %>% filter(name == "All") %>% pull(cumul_cases_new),
+      subtitle = "Total number of COVID-19 cases",
+      color = "yellow",
+      icon = icon("virus")
+    )
+  }) ## end of home_total_case
+  
+  output$home_total_death <- renderValueBox({
+    valueBox(
+      value = sum_cum %>% filter(name == "All") %>% pull(cumul_deaths_new),
+      subtitle = "Total number of deaths due to COVID-19",
+      color = "red",
+      icon = icon("skull-crossbones")
+    )
+  }) ## end of home_total_death
+  
+  output$home_total_vac <- renderValueBox({
+    valueBox(
+      value = sum_cum %>% filter(name == "All") %>% pull(cumul_daily_full),
+      subtitle = "Total number of fully vaccination",
+      color = "green",
+      icon = icon("syringe")
+    )
+  }) ## end of home_total_vac
+  
+  output$home_total_case_adjust <- renderValueBox({
+    valueBox(
+      value = formatC(sum_cum %>% filter(name == "All") %>% pull(cumul_cases_new_adjust), format = "f", digits = 1),
+      subtitle = "Adjusted number of COVID-19 cases",
+      color = "yellow",
+      icon = icon("virus")
+    )
+  }) ## end of home_total_case_adjust
+  
+  output$home_total_death_adjust <- renderValueBox({
+    valueBox(
+      value = formatC(sum_cum %>% filter(name == "All") %>% pull(cumul_deaths_new_adjust), format = "f", digits = 1),
+      subtitle = "Adjusted number of deaths",
+      color = "red",
+      icon = icon("skull-crossbones")
+    )
+  }) ## end of home_total_death_adjust
+  
+  output$home_total_vac_adjust <- renderValueBox({
+    valueBox(
+      value = formatC(sum_cum %>% filter(name == "All") %>% pull(cumul_daily_full_adjust), format = "f", digits = 1),
+      subtitle = "Adjusted number of fully vaccination",
+      color = "green",
+      icon = icon("syringe")
+    )
+  }) ## end of home_total_vac_adjust
+  
+  output$home_recent_trend <- renderPlotly({
+    dt_daily_state_last7 <- dt_daily_state %>%
+      select(state, date, !!as.symbol(input$home_recent_stat)) %>%
+      rename(values_from = !!as.symbol(input$home_recent_stat)) %>%
+      group_by(state) %>%
+      filter(row_number() > (n() - 7)) %>%
+      pivot_wider(id_cols = state, values_from = values_from, names_from = date) %>%
+      ungroup() %>%
+      arrange(desc(state))
+    
+    plt_case <- plot_ly(
+      x = colnames(dt_daily_state_last7 %>% select(-state)), y = dt_daily_state_last7 %>% pull(state), z = as.matrix(dt_daily_state_last7 %>% select(-state)),
+      type = "heatmap", colors = if(input$home_recent_stat == "daily_full_adjust"){"YlGn"}else{"OrRd"}
+    )
+  }) ## end of home_recent_stat
+  
+  
+  # menu_case -------------------------
   ## Adjusted daily incidence by states
   output$home_plt_case_state <- renderPlotly({
     
@@ -47,7 +119,7 @@ function(input, output, session){
         type = "bar", barmode = "stack", yaxis = "y2", name = ~paste("Cases:", state)
       ) %>%
       layout(
-        xaxis = list(title = "Date"),
+        xaxis = list(title = "Date", rangeslider = list(type = "date")),
         yaxis = list(title = "Not fully-vaccinated population per 100K population"), yaxis2 = ay,
         legend = list(title = list(text = "<b> States </b>"), orientation = "h", y = 100)
       )
@@ -68,7 +140,7 @@ function(input, output, session){
         type = "scatter", mode = "lines", name = ~paste("MA-7:", state)
       ) %>%
       layout(
-        yaxis = list(title = "Daily death cases per 1M population"), xaxis = list(title = "Date"),
+        yaxis = list(title = "Daily death cases per 1M population"), xaxis = list(title = "Date", rangeslider = list(type = "date")),
         legend = list(title = list(text = "<b> States </b>"), orientation = "h", y = 100)
       )
     
@@ -100,7 +172,7 @@ function(input, output, session){
         type = "bar", barmode = "stack", yaxis = "y2", name = ~paste("Deaths:", state)
       ) %>%
       layout(
-        xaxis = list(title = "Date"),
+        xaxis = list(title = "Date", rangeslider = list(type = "date")),
         yaxis = list(title = "Not fully-vaccinated population per 100K population"), yaxis2 = ay,
         legend = list(title = list(text = "<b> States </b>"), orientation = "h", y = 100)
       )

@@ -3,7 +3,7 @@ source("./global.R")
 dashboardPage(
   skin = "black",
   
-  dashboardHeader(title = "COVMAL - V00-01-01"),
+  dashboardHeader(title = "COVMAL - V00-01-02"),
   
   
   dashboardSidebar(
@@ -11,6 +11,8 @@ dashboardPage(
     
     sidebarMenu(
       menuItem("Home Page", tabName = "menu_home", icon = icon("home")),
+      
+      menuItem("Cases", tabName = "menu_case", icon = icon("viruses")),
       
       menuItem("Healthcare resource utilization", tabName = "menu_hru", icon = icon("hospital")),
       
@@ -26,6 +28,34 @@ dashboardPage(
       
       tabItem(
         tabName = "menu_home",
+        
+        fluidRow(
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Total number of cases", collapsible = TRUE,
+            valueBoxOutput("home_total_case", width = 4),
+            valueBoxOutput("home_total_death", width = 4),
+            valueBoxOutput("home_total_vac", width = 4)
+          ), ## end of box
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Adjusted Total number of cases per 100K population", collapsible = TRUE,
+            valueBoxOutput("home_total_case_adjust", width = 4),
+            valueBoxOutput("home_total_death_adjust", width = 4),
+            valueBoxOutput("home_total_vac_adjust", width = 4)
+          ), ## end of box
+          box(
+            solidHeader = TRUE, width = 12, height = "auto", title = "Recent adjusted trends per 100K population", collapsible = TRUE,
+            selectInput("home_recent_stat", "Select statistics:", choices = c("Choose" = "",
+                                                                              "New cases" = "cases_new_adjust",
+                                                                              "Deaths" = "deaths_new_adjust",
+                                                                              "Fully vaccination" = "daily_full_adjust"), 
+                        selected = "cases_new_adjust", multiple = FALSE),
+            plotlyOutput("home_recent_trend", height = "500px") %>% withSpinner(size = 2)
+          )
+        ) ## end of fluidRow
+      ), ## end of tabItem
+      
+      tabItem(
+        tabName = "menu_case",
         
         fluidRow(
           box(

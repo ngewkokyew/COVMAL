@@ -1,0 +1,388 @@
+function(input, output, session){
+  
+  ######################### index & market width ######################### 
+  ## get list of companies from index
+  dt_index <- eventReactive(
+    input$index_summary,
+    {
+      dt_index <- tq_get(input$market_index, complete_cases = TRUE, from = format(input$market_date[1]), to = format(input$market_date[2]))
+      
+      return(dt_index)
+    }
+  ) ## end of eventReactive
+  
+  ## derive market witdth
+  dt_width <- eventReactive(
+    input$index_summary,
+    {
+      if(input$market_index == "^GSPC"){
+        
+        dt_exchange <- dt_sp %>%
+          arrange(desc(weight)) %>%
+          slice_head(n = 250)
+        
+        dt_width <- tibble(date = character())
+        
+        for(i in unique(dt_exchange$sector)){
+          lst_stock <- dt_exchange %>% filter(`sector` == i) %>% pull(symbol)
+          
+          dt_width_raw <- tibble(symbol = character(), date = character(), bias = numeric())
+          
+          for(stock in lst_stock){
+            if(str_detect(stock, ".") == TRUE){stock <- str_replace(stock, "[.]", "-")} ## replace BRK.B to BRK-B
+            
+            dt_raw <- tq_get(stock, get = "stock.prices", complete_cases = TRUE, from = format(input$market_date[1] - 40), to = format(input$market_date[2]))
+            
+            if(nrow(dt_raw) > 100){
+              dt_tech <- dt_raw %>%
+                tq_mutate(select = close, mutate_fun = EMA, n = 20, col_rename = "ema_20") %>% ## moving average
+                mutate(bias = if_else(close > ema_20, 1, 0), date = as.character(date)) %>%
+                drop_na() %>%
+                select(symbol, date, bias)
+              
+              dt_width_raw <- dt_width_raw %>% add_row(dt_tech)
+            }
+            
+          } ## end of for loop stock
+          
+          dt_width_raw <- dt_width_raw %>%
+            group_by(date) %>%
+            summarise(!!as.symbol(i) := sum(bias)*100/length(lst_stock))
+          
+          dt_width <- dt_width %>% right_join(dt_width_raw)
+            
+        } ## end of for loop sector
+        
+        dt_width <- dt_width %>% 
+          mutate(Total = rowSums(across(where(is.numeric)))/11) %>% 
+          arrange(desc(date)) %>%
+          filter(as.Date(date) >= input$market_date[1] & as.Date(date) <= input$market_date[2])
+        
+      } ## end of if else
+    }
+  ) ## end of dt_width
+  
+  ##### plot index #####
+  output$plt_index <- renderPlotly({
+    
+    ## index
+    plot <- dt_index() %>%
+      plot_ly(
+        x = ~date, open = ~open, close = ~close, high = ~high, low = ~low, 
+        type = "candlestick", name = ""
+      ) %>%
+      layout(
+        paper_bgcolor = "#000000", plot_bgcolor = "#000000",
+        xaxis = list(title = "Date", rangeslider = list(visible = FALSE), color = "#ffffff"),
+        yaxis = list(side = "left", title = "Index", color = "#ffffff")
+      )
+    
+    ## width
+    if(input$market_index == "^GSPC"){
+      plt_width <- plot_ly(
+        x = pull(dt_width() %>% select(date)), y = colnames(dt_width())[-1], z = t(as.matrix(dt_width() %>% select(-date))),
+        type = "heatmap", colors = colorRamp(c("red", "green"))
+      ) %>%
+        layout(
+          yaxis = list(side = "left", title = "Width", color = "#ffffff")
+        )
+      
+      subplot(list(plot, plt_width), nrows = 2, shareX = TRUE, heights = c(0.75, 0.25), titleY = FALSE, titleX = TRUE)
+    } else {
+      plot
+    }
+    
+  }) ## end of output
+  
+  
+  ######################### stock bias ######################### 
+  dt_bias <- eventReactive(
+    input$bias_summary,
+    {
+      dt_bias <- tibble(stock = character(), bias_short = numeric(), bias_mid = numeric(), bias_long = numeric())
+      
+      for(stock in c("^GSPC", "^IXIC", input$bias_stock)){
+        if(str_detect(stock, ".") == TRUE){stock <- str_replace(stock, "[.]", "-")} ## replace BRK.B to BRK-B
+        
+        dt_raw <- tq_get(stock, get = "stock.prices", complete_cases = TRUE, from = (Sys.Date() - 180), to = Sys.Date())
+        
+        dt_tech <- dt_raw %>%
+          ## moving average
+          tq_mutate(select = close, mutate_fun = EMA, n = 20, col_rename = "ema_20") %>%
+          tq_mutate(select = close, mutate_fun = EMA, n = 60, col_rename = "ema_60") %>%
+          tq_mutate(select = close, mutate_fun = EMA, n = 120, col_rename = "ema_120") %>%
+          
+          ## difference
+          mutate(bias_short = (close - ema_20)*100/ema_20,
+                 bias_mid = (ema_20 - ema_60)*100/ema_60,
+                 bias_long = (ema_60 - ema_120)*100/ema_120) %>%
+          
+          select(bias_short, bias_mid, bias_long) %>%
+          slice_tail(n = 1)
+        
+        if(stock == "^GSPC"){
+          name <- "SP 500"
+        } else if(stock == "^IXIC"){
+          name <- "NASDAQ"
+        } else {
+          name <- stock
+        }
+        
+        dt_bias <- dt_bias %>% add_row(stock = name, bias_short = dt_tech$bias_short, bias_mid = dt_tech$bias_mid, bias_long = dt_tech$bias_long)
+      } ## end of for loop
+      
+      return(dt_bias)
+    }
+  ) ## end of dt_bias
+  
+  ## output
+  output$dt_bias <- renderDataTable({
+    datatable(dt_bias(), 
+              colnames = c("Stock(s)", "Short Bias", "Mid Bias", "Long Bias"), 
+              rownames = FALSE,
+              options = list(columnDefs = list(list(className = 'dt-center', targets = "_all")))) %>%
+      formatStyle(
+        columns = c("bias_short", "bias_mid", "bias_long"), color = "white", backgroundColor = styleInterval(0, c("red", "green"))
+      ) %>%
+      formatRound(columns = c("bias_short", "bias_mid", "bias_long"), digits = 3)
+  })
+  
+  
+  ######################### technical analysis ######################### 
+  ##### technical indicator #####
+  dt_tech <- eventReactive(
+    input$tech_summary,
+    {
+      dt_raw <- tq_get(toupper(input$tech_stock), get = "stock.prices", complete_cases)
+      
+      dt_tech <- dt_raw %>%
+        ## moving average
+        tq_mutate(select = close, mutate_fun = SMA, n = 20, col_rename = "sma_20") %>%
+        tq_mutate(select = close, mutate_fun = SMA, n = 60, col_rename = "sma_60") %>%
+        tq_mutate(select = close, mutate_fun = SMA, n = 120, col_rename = "sma_120") %>%
+        tq_mutate(select = close, mutate_fun = EMA, n = 20, col_rename = "ema_20") %>%
+        tq_mutate(select = close, mutate_fun = EMA, n = 60, col_rename = "ema_60") %>%
+        tq_mutate(select = close, mutate_fun = EMA, n = 120, col_rename = "ema_120") %>%
+        
+        ## discount price
+        mutate(min_20 = runMin(close, n = 20),
+               min_60 = runMin(close, n = 60),
+               max_20 = runMax(close, n = 20),
+               max_60 = runMax(close, n = 60)) %>%
+        
+        ## difference
+        mutate(bias_short = (close - ema_20)*100/ema_20,
+               bias_mid = (ema_20 - ema_60)*100/ema_60,
+               bias_long = (ema_60 - ema_120)*100/ema_120) %>%
+        
+        ## B Bands
+        tq_mutate(select = c(high, low, close), mutate_fun = BBands, n = 20) %>%
+        
+        ## momemtum
+        tq_mutate(select = close, mutate_fun = MACD, nFast = 12, nSlow = 26, 
+                  nSig = 9, maType = SMA, col_rename = c("diff", "signal")) %>%
+        mutate(macd = diff - signal) %>%
+        
+        ## volume
+        mutate(volume_20 = runMean(volume, 20))
+      
+      dt_tech <- dt_tech %>% filter(as.Date(date) >= input$tech_date[1] & as.Date(date) <= input$tech_date[2])
+      
+      return(dt_tech)
+    }
+  ) ## end of dt_tech
+  
+  ##### volume profile #####
+  lst_vp <- reactive({
+    
+    dt_vp <- dt_tech() %>%
+      mutate(adjust = round((close + high + low)/3, digits = 0)) %>%
+      select(adjust, volume) %>%
+      arrange(adjust) %>% 
+      group_by(adjust) %>%
+      summarise(sum_volume = sum(volume))
+    
+    ## Initiaition
+    index_poc <- which.max(dt_vp$sum_volume)
+    poc <- dt_vp %>% filter(row_number() == index_poc)
+    value_area <- sum(dt_vp$sum_volume)*0.7
+    total_volume <- 0
+    row <- nrow(dt_vp)
+    
+    i <- index_poc - 1
+    j <- index_poc + 1
+    
+    while((total_volume < value_area) & (i > 0 | j <= row)){
+      
+      ## Volume above POC
+      if(i > 0 & (i - 1) > 0){
+        
+        total_volume_above <- dt_vp %>% 
+          ungroup() %>%
+          filter(row_number() %in% c(i, i-1)) %>%
+          summarise(sum(sum_volume)) %>%
+          pull()
+        
+      } else {total_volume_above <- 0}
+      
+      ## Volume below POC
+      if(j <= nrow(dt_vp) & (j + 1) <= nrow(dt_vp)){
+        
+        total_volume_below <- dt_vp %>% 
+          ungroup() %>%
+          filter(row_number() %in% c(j, j+1)) %>%
+          summarise(sum(sum_volume)) %>%
+          pull()
+        
+      } else {total_volume_below <- 0}
+      
+      ## Max of volume above & below POC
+      total_volume <- total_volume + max(total_volume_above, total_volume_below)
+      
+      ## Select value area
+      if(i > 0 & (i - 1) > 0 & j <= nrow(dt_vp) & (j + 1) <= nrow(dt_vp)){
+        dt_vp[c(i, i-1, j, j+1), "value_area"] <- "y"
+      } else if((i <= 0 | (i - 1) <= 0) & j <= nrow(dt_vp) & (j + 1) <= nrow(dt_vp)){
+        dt_vp[c(j, j+1), "value_area"] <- "y"
+      } else {
+        dt_vp[c(i, i-1), "value_area"] <- "y"
+      }
+      
+      ## Re-initiate
+      i <- i - 2
+      j <- j + 2
+      rm(total_volume_above, total_volume_below)
+      
+    }
+    
+    dt_vp <- dt_vp %>%
+      mutate(value_area = if_else(row_number() == index_poc, "y", `value_area`),
+             value_area = replace_na(value_area, "n"),
+             poc = if_else(row_number() == index_poc, "y", "n"))
+    
+    rm(i, j, total_volume, value_area, index_poc)
+    
+    ## High area
+    poc_high <- dt_vp %>%
+      filter(value_area == "y") %>%
+      slice_head(1)
+    
+    ## Low area
+    poc_low <- dt_vp %>%
+      filter(value_area == "y") %>%
+      slice_tail(1)
+    
+    ## Weighted standard deviation
+    weight_mean <- weighted.mean(x = dt_vp$adjust, w = dt_vp$sum_volume)
+    weight_num <- dt_vp %>%
+      mutate(diff = sum_volume*((adjust - weight_mean)^2)) %>%
+      summarise(sum(diff)) %>%
+      pull()
+    weight_denominator <- dt_vp %>%
+      mutate(weight = ((nrow(dt_vp) - 1)/ nrow(dt_vp))*sum_volume) %>%
+      summarise(sum(weight)) %>%
+      pull()
+    vp_ci <- sqrt(weight_num/weight_denominator)*0.5/ sqrt(nrow(dt_vp)) ## should be replace by appropriate confidence interval value
+    
+    return(list(dt_vp, poc, poc_high, poc_low, vp_ci))
+    
+  })
+  
+  ##### value box tech #####
+  dt_last <- reactive({dt_tech() %>% slice_tail()})
+  
+  output$tech_close <- renderValueBox({
+    valueBox(
+      value = formatC(dt_last()[["close"]], format = "f", digits = 2),
+      subtitle = "Previous closing price",
+      color = if(dt_last()[["close"]] > dt_last()[["open"]]) {"green"} else {"red"}
+    )
+  })
+  
+  output$tech_min_max_20 <- renderValueBox({
+    valueBox(
+      value = paste(formatC(dt_last()[["min_20"]], format = "f", digits = 2), formatC(dt_last()[["max_20"]], format = "f", digits = 2), sep = " / "),
+      subtitle = "Minimum and maximum closing price in the past 20 days",
+      color = "navy"
+    )
+  })
+  
+  output$tech_min_max_60 <- renderValueBox({
+    valueBox(
+      value = paste(formatC(dt_last()[["min_60"]], format = "f", digits = 2), formatC(dt_last()[["max_60"]], format = "f", digits = 2), sep = " / "),
+      subtitle = "Minimum and maximum closing price in the past 60 days",
+      color = "black"
+    )
+  })
+  
+  ##### extreme bias #####
+  bias_measure <- reactive({
+    key_level_1 <- quantile(dt_tech() %>% filter(bias_short < 0) %>% pull(bias_short), 0.1)
+    key_level_2 <- quantile(dt_tech() %>% filter(bias_short > 0) %>% pull(bias_short), 0.9)
+    return(list(key_level_1, key_level_2))
+  }) 
+  
+  ##### plt_tech #####
+  ## range selector
+  rs <- list(
+    visible = TRUE, x = 0.5, y = -0.055, xanchor = "center", yref = "paper", font = list(size = 9),
+    buttons = list(
+      list(count = 1, label = "Reset", step = "all"),
+      list(count = 1, label = "1 Months", step = "month", stepmode = "backward"),
+      list(count = 3, label = "3 Months", step = "month", stepmode = "backward"),
+      list(count = 6, label = "6 Months", step = "month", stepmode = "backward"),
+      list(count = 9, label = "9 Motnhs", step = "month", stepmode = "backward")
+    )
+  ) ## end of range selector
+  
+  output$plt_tech <- renderPlotly({
+    
+    plot <- dt_tech() %>%
+      ## basic candlestick 
+      plot_ly(x = ~date, type = "candlestick", open = ~open, close = ~close, high = ~high, low = ~low, name = "Candle") %>% 
+      
+      ## B Bands
+      #add_ribbons(ymin = ~dn, ymax = ~up, line = list(color = "rgba(7, 164, 181, 0.05"), fillcolor = "rgba(7, 164, 181, 0.2)", name = "B Bands") %>%
+      
+      ## Volume
+      add_trace(x = ~date, y = ~(volume*(-1)), type = "bar", name = "Volume", yaxis = "y2") %>%
+      add_trace(x = ~date, y = ~(volume_20*(-1)), type = "scatter", mode = "lines", name = "Average volume in 20 days", yaxis = "y2") %>%
+      
+      ## Bias
+      add_lines(x = ~date, y = ~bias_short, name = "Bias (short)", yaxis = "y3") %>%
+      add_lines(x = ~date, y = ~bias_mid, name = "Bias (mid)", yaxis = "y3") %>%
+      add_bars(x = ~date, y = ~bias_long, name = "Bias (long)", yaxis = "y3") %>%
+      add_trace(x = ~date, y = bias_measure()[[1]], type = 'scatter', mode = 'lines', yaxis = "y3", name = "Extreme bias") %>%
+      add_trace(x = ~date, y = bias_measure()[[2]], type = 'scatter', mode = 'lines', yaxis = "y3", name = "Extreme bias") %>%
+      
+
+      ## final layout
+      layout(paper_bgcolor = "#000000", plot_bgcolor = "#000000",
+             legend = list(orientation = "h", y = 1.02, font = list(color = "#ffffff")),
+             xaxis = list(title = "", rangeselector = rs, rangeslider = list(visible = FALSE), color = "#ffffff"),
+             yaxis = list(side = "left", title = "Price", color = "#ffffff"),
+             yaxis2 = list(side = "right", title = "", color = "#ffffff", range = c(-(max(dt_tech()["volume"]))*20, 0), visible = FALSE, overlaying = "y"),
+             yaxis3 = list(side = "right", title = "", color = "#ffffff", range = c((min(dt_tech()["bias_short"])), (max(dt_tech()["bias_short"]))*20), visible = FALSE, overlaying = "y"),
+             ## Add POC line
+             shapes = list(list(type = "rect", fillcolor = "orange", opacity = 0.2,
+                                x0 = dt_tech() %>% slice_head(1) %>% pull(date), x1 = dt_tech() %>% slice_tail(1) %>% pull(date), xref = "x",
+                                y0 = ((lst_vp()[[2]] %>% pull(adjust)) - lst_vp()[[5]]), y1 = ((lst_vp()[[2]] %>% pull(adjust)) + lst_vp()[[5]]), yref = "y"),
+                           list(type = "rect", fillcolor = "orange", opacity = 0.2,
+                                x0 = dt_tech() %>% slice_head(1) %>% pull(date), x1 = dt_tech() %>% slice_tail(1) %>% pull(date), xref = "x",
+                                y0 = ((lst_vp()[[3]] %>% pull(adjust)) - lst_vp()[[5]]), y1 = ((lst_vp()[[3]] %>% pull(adjust)) + lst_vp()[[5]]), yref = "y"),
+                           list(type = "rect", fillcolor = "orange", opacity = 0.2,
+                                x0 = dt_tech() %>% slice_head(1) %>% pull(date), x1 = dt_tech() %>% slice_tail(1) %>% pull(date), xref = "x",
+                                y0 = ((lst_vp()[[4]] %>% pull(adjust)) - lst_vp()[[5]]), y1 = ((lst_vp()[[4]] %>% pull(adjust)) + lst_vp()[[5]]), yref = "y")))
+    
+    ## update according to other chosen MA indicators
+    if(!is.null(input$tech_indicator)){
+      for(indicator in input$tech_indicator){
+        plot <- plot %>% add_lines(y = as.formula(paste0("~`", indicator, "`")), name = indicator)
+      }
+    }
+    
+    ## Output
+    plot
+  })
+  
+}

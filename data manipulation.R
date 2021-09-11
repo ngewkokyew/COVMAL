@@ -59,7 +59,7 @@ dt_daily_state <- dt_daily %>%
     cumul_not_full = pop - cumul_full, ## not having fully vaccination
     cases_new_adjust = cases_new*100000/pop,
     deaths_new_adjust = deaths_new*1000000/pop,
-    daily_full_adjust = daily_full*10000/pop,
+    daily_full_adjust = daily_full*100000/pop,
     cumul_full_adjust = cumul_full*100000/pop,
     cumul_not_full_adjust = cumul_not_full*100/pop,
     cumul_not_full_adjust = if_else(cumul_not_full_adjust < 0, 0, cumul_not_full_adjust), # to address over-injections for non-registered people
@@ -94,6 +94,8 @@ sum_cum <- dt_daily_state %>%
     cumul_cases_new_adjust = sum(cases_new_adjust, na.rm = TRUE),
     cumul_deaths_new = sum(deaths_new, na.rm = TRUE),
     cumul_deaths_new_adjust = sum(deaths_new_adjust, na.rm = TRUE),
+    cumul_daily_full = sum(daily_full, na.rm = TRUE),
+    cumul_daily_full_adjust = sum(daily_full_adjust, na.rm = TRUE),
     # cum_recover = sum(cases_recovered, na.rm = TRUE)
   ) %>%
   # mutate(
