@@ -1,27 +1,27 @@
 {
-    "id": "D12AD4BE",
-    "path": "D:/Projects/Covid/COVMAL/data manipulation.R",
-    "project_path": "data manipulation.R",
+    "id": "38F8DFFD",
+    "path": "D:/Projects/Covid/COVMAL/server.R",
+    "project_path": "server.R",
     "type": "r_source",
-    "hash": "0",
+    "hash": "454151002",
     "contents": "",
     "dirty": false,
-    "created": 1630407520406.0,
+    "created": 1631333654574.0,
     "source_on_save": false,
-    "relative_order": 2,
+    "relative_order": 5,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "77,9",
-        "scrollLine": "24"
+        "cursorPosition": "148,2",
+        "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1631334475,
+    "lastKnownWriteTime": 1631337922,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1631334475029,
+    "last_content_update": 1631337922417,
     "read_only": false,
     "read_only_alternatives": []
 }
